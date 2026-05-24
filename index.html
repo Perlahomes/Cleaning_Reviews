@@ -6,6 +6,8 @@
 <title>Cleaning Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
   :root {
@@ -239,7 +241,7 @@
 
     <!-- REVIEWS -->
     <div class="page" id="page-reviews">
-      <div class="page-header"><div class="page-title">All reviews</div></div>
+      <div class="page-header"><div class="page-title">All reviews</div><button class="btn" onclick="exportToExcel()"><i class="ti ti-file-spreadsheet" aria-hidden="true"></i> Export to Excel</button></div>
       <div class="card">
         <div class="filter-row">
           <select id="fp" onchange="renderReviews()"><option value="all">All platforms</option><option value="airbnb">Airbnb</option><option value="booking">Booking.com</option></select>
@@ -688,6 +690,28 @@ async function importFromHosthub(){
     btn.disabled=false;
     btn.innerHTML='<i class="ti ti-cloud-download" aria-hidden="true"></i> Import from Hosthub';
   }
+}
+
+function exportToExcel(){
+  if(!allReviews.length){toast('No reviews to export!');return;}
+  const rows=allReviews.map(r=>({
+    'Date': r.date,
+    'Cleaner 1': r.cleaner1,
+    'Cleaner 2': r.cleaner2||'',
+    'Accommodation': r.accom,
+    'Platform': r.platform==='airbnb'?'Airbnb':'Booking.com',
+    'Score (original)': r.score,
+    'Score (normalized /10)': norm(r.score,r.platform),
+    'Comment': r.comment||'',
+    'Added by': r.added_by||''
+  }));
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,'Reviews',ws);
+  ws['!cols']=[{wch:12},{wch:16},{wch:16},{wch:18},{wch:14},{wch:16},{wch:20},{wch:40},{wch:25}];
+  const date=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,'cleaning-reviews-'+date+'.xlsx');
+  toast('Exported successfully!');
 }
 
 // Init
