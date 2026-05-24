@@ -269,9 +269,16 @@
         <div class="settings-section">
           <div class="settings-label">Accommodations</div>
           <div class="tag-list" id="accoms-list"></div>
-          <div class="add-row">
+          <div class="add-row" style="margin-bottom:10px;">
             <input type="text" id="new-accom" placeholder="Add new accommodation..."/>
             <button class="btn btn-primary" onclick="addAccom()"><i class="ti ti-plus" aria-hidden="true"></i> Add</button>
+          </div>
+          <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Import directly from Hosthub</div>
+            <button class="btn" onclick="importFromHosthub()" id="hosthub-btn">
+              <i class="ti ti-cloud-download" aria-hidden="true"></i> Import from Hosthub
+            </button>
+            <div id="hosthub-status" style="font-size:12px;color:var(--text2);margin-top:8px;display:none;"></div>
           </div>
         </div>
       </div>
@@ -643,6 +650,43 @@ function showPage(p){
   const navItems=document.querySelectorAll('.nav-item');
   if(navMap[p]!==undefined&&navItems[navMap[p]])navItems[navMap[p]].classList.add('active');
   if(p==='settings')loadTeam();
+}
+
+async function importFromHosthub(){
+  const btn=document.getElementById('hosthub-btn');
+  const status=document.getElementById('hosthub-status');
+  btn.disabled=true;
+  btn.innerHTML='<i class="ti ti-loader" aria-hidden="true"></i> Importing...';
+  status.style.display='block';
+  status.textContent='Fetching properties from Hosthub...';
+  try{
+    const resp=await fetch('https://app.hosthub.com/api/2019-03-01/rentals',{
+      headers:{'Authorization':'ZGY4ODM5OTktN2Y3MC00NmVkLTg1M2MtMjI4NTJiNWVmZGRk','Content-Type':'application/json'}
+    });
+    if(!resp.ok)throw new Error('API returned '+resp.status);
+    const json=await resp.json();
+    const rentals=json.data||[];
+    if(!rentals.length){status.textContent='No properties found in Hosthub.';return;}
+    let added=0,skipped=0;
+    for(const rental of rentals){
+      const name=rental.name;
+      if(!name)continue;
+      const exists=accomsList.find(a=>a.name.toLowerCase()===name.toLowerCase());
+      if(exists){skipped++;continue;}
+      const {error}=await db.from('accommodations').insert({name});
+      if(!error)added++;
+    }
+    await loadAccoms();
+    status.textContent=`Done! ${added} imported, ${skipped} already existed.`;
+    status.style.color='var(--high)';
+    toast(`Imported ${added} accommodations from Hosthub!`);
+  }catch(e){
+    status.textContent='Error: '+e.message+'. Check your API key or CORS settings.';
+    status.style.color='var(--low)';
+  }finally{
+    btn.disabled=false;
+    btn.innerHTML='<i class="ti ti-cloud-download" aria-hidden="true"></i> Import from Hosthub';
+  }
 }
 
 // Init
