@@ -148,7 +148,7 @@
     <div class="login-logo"><div class="logo-dot"></div> Cleaning Tracker</div>
     <h2>Sign in to your account</h2>
     <div class="error-msg" id="login-error"></div>
-    <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="your@email.com"/></div>
+    <div class="field"><label>Username</label><input type="text" id="login-username" placeholder="e.g. ΑΡΓΥΡΩ" autocomplete="username"/></div>
     <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="••••••••"/></div>
     <button class="btn btn-primary btn-full" onclick="doLogin()" style="margin-top:4px;">Sign in</button>
   </div>
@@ -320,7 +320,8 @@ function scoreClass(n){return n<=4?'s-low':n<=6?'s-mid':'s-high';}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 
 async function doLogin(){
-  const email=document.getElementById('login-email').value.trim();
+  const username=document.getElementById("login-username").value.trim().toLowerCase();
+  const email=username+"@perlahomes.com";
   const pass=document.getElementById('login-password').value;
   const err=document.getElementById('login-error');
   err.style.display='none';
