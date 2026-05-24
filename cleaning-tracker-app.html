@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cleaning Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#f5f4f0;--surface:#ffffff;--surface2:#eeecea;--border:#d8d5cf;
+    --text:#1a1916;--text2:#7a7570;--airbnb:#FF5A5F;--booking:#003580;
+    --accent:#2d5a3d;--low:#c0392b;--mid:#b5610a;--high:#2d6a1f;
+    --radius:10px;--shadow:0 1px 3px rgba(0,0,0,0.08),0 4px 16px rgba(0,0,0,0.04);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+  /* LOGIN */
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
+  .login-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:2rem;width:360px;}
+  .login-logo{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600;margin-bottom:1.5rem;}
+  .logo-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);}
+  .login-card h2{font-size:15px;font-weight:500;margin-bottom:1.25rem;color:var(--text2);}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:4px;}
+  .field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;background:var(--bg);color:var(--text);outline:none;transition:border-color 0.15s;}
+  .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);}
+  .field textarea{resize:none;height:70px;}
+  .btn{padding:9px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.12s;}
+  .btn:hover{background:var(--surface2);}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn-primary:hover{opacity:0.88;background:var(--accent);}
+  .btn-danger{background:#fde8e8;color:var(--low);border-color:#f5c0c0;}
+  .btn-full{width:100%;justify-content:center;}
+  .error-msg{background:#fde8e8;color:var(--low);border-radius:7px;padding:8px 12px;font-size:13px;margin-bottom:12px;display:none;}
+
+  /* APP SHELL */
+  .app-shell{display:flex;min-height:100vh;}
+  .sidebar{width:200px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:10;}
+  .sidebar-logo{padding:18px 16px;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:10px 16px;cursor:pointer;color:var(--text2);border-left:2px solid transparent;font-size:14px;transition:all 0.12s;}
+  .nav-item:hover{background:var(--surface2);color:var(--text);}
+  .nav-item.active{color:var(--accent);background:#2d5a3d10;border-left-color:var(--accent);font-weight:500;}
+  .nav-item i{font-size:17px;}
+  .sidebar-bottom{margin-top:auto;padding:14px;border-top:1px solid var(--border);}
+  .user-row{display:flex;align-items:center;gap:9px;}
+  .user-av{width:32px;height:32px;border-radius:50%;background:#B5D4F4;color:#0C447C;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;}
+  .user-name{font-size:13px;font-weight:500;}
+  .user-role{font-size:11px;color:var(--text2);}
+  .main-content{margin-left:200px;flex:1;padding:2rem;max-width:1100px;}
+
+  /* PAGES */
+  .page{display:none;}
+  .page.active{display:block;}
+  .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
+  .page-title{font-size:20px;font-weight:500;}
+
+  /* METRICS */
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem;}
+  .metric{background:var(--surface2);border-radius:var(--radius);padding:14px;}
+  .metric-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;}
+  .metric-val{font-size:26px;font-weight:500;font-family:'DM Mono',monospace;}
+  .metric-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+
+  /* CARDS */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:1.25rem;margin-bottom:1.25rem;}
+  .card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text2);margin-bottom:1rem;}
+  .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;}
+  .chart-wrap{position:relative;height:220px;}
+
+  /* PLATFORM TOGGLE */
+  .platform-toggle{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem;}
+  .ptab{flex:1;padding:9px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;border:none;background:transparent;color:var(--text2);transition:all 0.15s;}
+  .ptab.ab{background:var(--airbnb);color:#fff;}
+  .ptab.bk{background:var(--booking);color:#fff;}
+
+  /* STARS / DOTS */
+  .stars{display:flex;gap:4px;margin-top:3px;}
+  .star{font-size:28px;cursor:pointer;color:#d0ccc4;transition:color 0.1s,transform 0.1s;line-height:1;}
+  .star.on{color:#e2a600;}
+  .star:hover{transform:scale(1.15);}
+  .bdots{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px;}
+  .bdot{width:34px;height:34px;border-radius:7px;border:1px solid var(--border);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all 0.12s;font-family:'DM Mono',monospace;}
+  .bdot.on{background:var(--booking);color:#fff;border-color:var(--booking);}
+  .norm-note{font-size:11px;color:var(--text2);margin-top:5px;font-family:'DM Mono',monospace;}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+  /* REVIEWS LIST */
+  .filter-row{display:flex;gap:8px;margin-bottom:1rem;}
+  .filter-row select{flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface);color:var(--text);}
+  .review-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--surface2);}
+  .review-item:last-child{border-bottom:none;}
+  .av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;margin-top:1px;}
+  .rinfo{flex:1;min-width:0;}
+  .rname{font-size:13px;font-weight:500;}
+  .rsub{font-size:12px;color:var(--text2);margin-top:1px;}
+  .rcomment{font-size:12px;color:var(--text2);margin-top:4px;font-style:italic;line-height:1.5;}
+  .radded{font-size:11px;color:var(--text2);margin-top:2px;}
+  .ppill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;}
+  .pill-a{background:#FF5A5F18;color:#c0373b;}
+  .pill-b{background:#00358018;color:#003580;}
+  .sbadge{font-size:12px;font-weight:600;font-family:'DM Mono',monospace;padding:3px 10px;border-radius:20px;white-space:nowrap;}
+  .s-low{background:#fde8e8;color:var(--low);}
+  .s-mid{background:#faeeda;color:var(--mid);}
+  .s-high{background:#eaf3de;color:var(--high);}
+  .delbtn{background:none;border:none;cursor:pointer;color:var(--text2);font-size:16px;padding:3px 6px;border-radius:5px;transition:all 0.12s;flex-shrink:0;}
+  .delbtn:hover{background:#fde8e8;color:var(--low);}
+
+  /* SETTINGS */
+  .settings-section{margin-bottom:1.5rem;}
+  .settings-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text2);margin-bottom:10px;}
+  .tag-list{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;}
+  .tag{display:flex;align-items:center;gap:6px;padding:5px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:13px;}
+  .tag-del{background:none;border:none;cursor:pointer;color:var(--text2);font-size:13px;line-height:1;padding:0;}
+  .tag-del:hover{color:var(--low);}
+  .add-row{display:flex;gap:8px;}
+  .add-row input{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface);color:var(--text);outline:none;}
+  .add-row input:focus{border-color:var(--accent);}
+  .team-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--surface2);}
+  .team-row:last-child{border-bottom:none;}
+  .role-badge{font-size:11px;padding:2px 9px;border-radius:20px;}
+  .role-admin{background:#eaf3de;color:var(--high);}
+  .role-user{background:var(--surface2);color:var(--text2);}
+
+  /* TOAST */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 22px;border-radius:8px;font-size:13px;opacity:0;transition:opacity 0.25s;pointer-events:none;z-index:999;white-space:nowrap;}
+  .toast.show{opacity:1;}
+
+  /* LOADING */
+  .loading{text-align:center;padding:3rem;color:var(--text2);font-size:14px;}
+
+  @media(max-width:700px){
+    .sidebar{width:100%;height:auto;position:relative;flex-direction:row;flex-wrap:wrap;}
+    .main-content{margin-left:0;}
+    .metrics{grid-template-columns:1fr 1fr;}
+    .charts-grid{grid-template-columns:1fr;}
+    .form-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-wrap" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo"><div class="logo-dot"></div> Cleaning Tracker</div>
+    <h2>Sign in to your account</h2>
+    <div class="error-msg" id="login-error"></div>
+    <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="your@email.com"/></div>
+    <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="••••••••"/></div>
+    <button class="btn btn-primary btn-full" onclick="doLogin()" style="margin-top:4px;">Sign in</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app-shell" id="app-screen" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="logo-dot"></div> Cleaning Tracker</div>
+    <nav style="padding:8px 0;">
+      <div class="nav-item active" onclick="showPage('dashboard')"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> Dashboard</div>
+      <div class="nav-item" onclick="showPage('add')"><i class="ti ti-plus" aria-hidden="true"></i> Add review</div>
+      <div class="nav-item" onclick="showPage('reviews')"><i class="ti ti-clipboard-list" aria-hidden="true"></i> Reviews</div>
+      <div class="nav-item" id="nav-settings" style="display:none;" onclick="showPage('settings')"><i class="ti ti-settings" aria-hidden="true"></i> Settings</div>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="user-row" style="margin-bottom:10px;">
+        <div class="user-av" id="user-av">?</div>
+        <div><div class="user-name" id="user-name">—</div><div class="user-role" id="user-role-label">—</div></div>
+      </div>
+      <button class="btn btn-full" onclick="doLogout()" style="font-size:12px;padding:6px;">Sign out</button>
+    </div>
+  </div>
+
+  <div class="main-content">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header"><div class="page-title">Dashboard</div></div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">Total reviews</div><div class="metric-val" id="m-total">—</div></div>
+        <div class="metric"><div class="metric-label">Avg score</div><div class="metric-val" id="m-avg">—</div><div class="metric-sub">out of 10</div></div>
+        <div class="metric"><div class="metric-label">Cleaners</div><div class="metric-val" id="m-cleaners">—</div></div>
+        <div class="metric"><div class="metric-label">Worst avg</div><div class="metric-val" id="m-worst" style="font-size:16px;color:var(--low);">—</div></div>
+      </div>
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-title">Avg score per cleaner (normalized /10)</div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Airbnb ×2 to match Booking.com scale · <span style="color:var(--airbnb);">● Airbnb</span> <span style="color:var(--booking);margin-left:6px;">● Booking</span></div>
+          <div class="chart-wrap"><canvas id="c-cleaners" role="img" aria-label="Bar chart average score per cleaner"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Bad reviews per accommodation</div>
+          <div class="chart-wrap"><canvas id="c-accoms" role="img" aria-label="Bar chart reviews per accommodation"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Score trend over time</div>
+        <div class="tabs" id="trend-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div class="chart-wrap"><canvas id="c-trend" role="img" aria-label="Line chart score trend over time"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ADD REVIEW -->
+    <div class="page" id="page-add">
+      <div class="page-header"><div class="page-title">Add review</div></div>
+      <div class="card">
+        <div class="platform-toggle">
+          <button class="ptab ab" id="btn-ab" onclick="setPlatform('airbnb')">✦ Airbnb (1–5)</button>
+          <button class="ptab" id="btn-bk" onclick="setPlatform('booking')">⬛ Booking.com (1–10)</button>
+        </div>
+        <div class="form-row" style="margin-bottom:12px;">
+          <div class="field"><label>Cleaner 1</label>
+            <select id="f-cleaner1"><option value="">Select cleaner...</option></select>
+          </div>
+          <div class="field"><label>Cleaner 2 (optional)</label>
+            <select id="f-cleaner2"><option value="">— none —</option></select>
+          </div>
+          <div class="field"><label>Accommodation</label>
+            <select id="f-accom"><option value="">Select accommodation...</option></select>
+          </div>
+          <div class="field"><label>Date</label><input type="date" id="f-date"/></div>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Score</label>
+          <div id="score-area"></div>
+          <div class="norm-note" id="norm-note"></div>
+        </div>
+        <div class="field" style="margin-bottom:14px;">
+          <label>Guest comment (optional)</label>
+          <textarea id="f-comment" placeholder="Paste the guest's review text here..."></textarea>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="addReview()">
+          <i class="ti ti-device-floppy" aria-hidden="true"></i> Save review
+        </button>
+      </div>
+    </div>
+
+    <!-- REVIEWS -->
+    <div class="page" id="page-reviews">
+      <div class="page-header"><div class="page-title">All reviews</div></div>
+      <div class="card">
+        <div class="filter-row">
+          <select id="fp" onchange="renderReviews()"><option value="all">All platforms</option><option value="airbnb">Airbnb</option><option value="booking">Booking.com</option></select>
+          <select id="fc" onchange="renderReviews()"><option value="all">All cleaners</option></select>
+          <select id="fa" onchange="renderReviews()"><option value="all">All accommodations</option></select>
+        </div>
+        <div id="reviews-list"><div class="loading">Loading reviews...</div></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS (admin only) -->
+    <div class="page" id="page-settings">
+      <div class="page-header"><div class="page-title">Settings</div><span style="font-size:12px;color:var(--text2);">Admin only</span></div>
+
+      <div class="card">
+        <div class="settings-section">
+          <div class="settings-label">Cleaners</div>
+          <div class="tag-list" id="cleaners-list"></div>
+          <div class="add-row">
+            <input type="text" id="new-cleaner" placeholder="Add new cleaner..."/>
+            <button class="btn btn-primary" onclick="addCleaner()"><i class="ti ti-plus" aria-hidden="true"></i> Add</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="settings-section">
+          <div class="settings-label">Accommodations</div>
+          <div class="tag-list" id="accoms-list"></div>
+          <div class="add-row">
+            <input type="text" id="new-accom" placeholder="Add new accommodation..."/>
+            <button class="btn btn-primary" onclick="addAccom()"><i class="ti ti-plus" aria-hidden="true"></i> Add</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="settings-label">Team members</div>
+        <div id="team-list"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://uvpsxbzmllijpnmibbyy.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_guy0bIQbs2DmM7hlajDKrA_DBfJpPyG';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const AV_BG=['#B5D4F4','#9FE1CB','#F5C4B3','#CECBF6','#FAC775','#F4C0D1','#C0DD97','#ffd6b0'];
+const AV_TX=['#0C447C','#085041','#993C1D','#3C3489','#854f0b','#72243e','#3B6D11','#7a3800'];
+const COLORS=['#3266ad','#1d9e75','#d85a30','#7f77dd','#ba7517','#993556','#639922','#E24B4A'];
+
+let currentUser = null;
+let isAdmin = false;
+let allReviews = [];
+let cleanersList = [];
+let accomsList = [];
+let platform = 'airbnb';
+let selectedScore = 0;
+let activeTrendCleaner = null;
+let charts = {};
+
+function norm(s,p){return p==='airbnb'?s*2:s;}
+function initials(n){return n.split(/[\s+]+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);}
+function scoreClass(n){return n<=4?'s-low':n<=6?'s-mid':'s-high';}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  const err=document.getElementById('login-error');
+  err.style.display='none';
+  const {data,error}=await db.auth.signInWithPassword({email,password:pass});
+  if(error){err.textContent=error.message;err.style.display='block';return;}
+  await initApp(data.user);
+}
+
+async function doLogout(){
+  await db.auth.signOut();
+  document.getElementById('app-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+}
+
+async function initApp(user){
+  currentUser=user;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-screen').style.display='flex';
+  const {data:roleData}=await db.from('user_roles').select('role').eq('user_id',user.id).single();
+  isAdmin=roleData?.role==='admin';
+  const emailName=user.email.split('@')[0];
+  document.getElementById('user-av').textContent=emailName.slice(0,2).toUpperCase();
+  document.getElementById('user-name').textContent=emailName;
+  document.getElementById('user-role-label').textContent=isAdmin?'Admin':'Team member';
+  if(isAdmin)document.getElementById('nav-settings').style.display='flex';
+  await loadAll();
+  showPage('dashboard');
+}
+
+async function loadAll(){
+  await Promise.all([loadCleaners(),loadAccoms(),loadReviews()]);
+}
+
+async function loadCleaners(){
+  const {data}=await db.from('cleaners').select('*').order('name');
+  cleanersList=data||[];
+  populateCleanerSelects();
+  renderCleanerTags();
+}
+
+async function loadAccoms(){
+  const {data}=await db.from('accommodations').select('*').order('name');
+  accomsList=data||[];
+  populateAccomSelects();
+  renderAccomTags();
+}
+
+async function loadReviews(){
+  const {data}=await db.from('reviews').select('*').order('date',{ascending:false});
+  allReviews=data||[];
+  renderDashboard();
+  renderReviews();
+}
+
+function populateCleanerSelects(){
+  const s1=document.getElementById('f-cleaner1');
+  const s2=document.getElementById('f-cleaner2');
+  const v1=s1.value,v2=s2.value;
+  s1.innerHTML='<option value="">Select cleaner...</option>'+cleanersList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  s2.innerHTML='<option value="">— none —</option>'+cleanersList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  if(v1)s1.value=v1;
+  if(v2)s2.value=v2;
+  const fc=document.getElementById('fc');
+  const prev=fc.value;
+  fc.innerHTML='<option value="all">All cleaners</option>'+cleanersList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  if(prev)fc.value=prev;
+}
+
+function populateAccomSelects(){
+  const s=document.getElementById('f-accom');
+  const v=s.value;
+  s.innerHTML='<option value="">Select accommodation...</option>'+accomsList.map(a=>`<option value="${a.name}">${a.name}</option>`).join('');
+  if(v)s.value=v;
+  const fa=document.getElementById('fa');
+  const prev=fa.value;
+  fa.innerHTML='<option value="all">All accommodations</option>'+accomsList.map(a=>`<option value="${a.name}">${a.name}</option>`).join('');
+  if(prev)fa.value=prev;
+}
+
+function setPlatform(p){
+  platform=p;selectedScore=0;
+  document.getElementById('btn-ab').className='ptab'+(p==='airbnb'?' ab':'');
+  document.getElementById('btn-bk').className='ptab'+(p==='booking'?' bk':'');
+  renderScoreInput();
+  document.getElementById('norm-note').textContent='';
+}
+
+function renderScoreInput(){
+  const el=document.getElementById('score-area');
+  if(platform==='airbnb'){
+    el.innerHTML='<div class="stars">'+[1,2,3,4,5].map(v=>`<span class="star" onclick="setStar(${v})">★</span>`).join('')+'</div>';
+  }else{
+    el.innerHTML='<div class="bdots">'+[1,2,3,4,5,6,7,8,9,10].map(v=>`<div class="bdot" onclick="setBDot(${v})">${v}</div>`).join('')+'</div>';
+  }
+}
+
+function setStar(v){
+  selectedScore=v;
+  document.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('on',i<v));
+  document.getElementById('norm-note').textContent='→ Normalized to '+(v*2)+'/10';
+}
+
+function setBDot(v){
+  selectedScore=v;
+  document.querySelectorAll('.bdot').forEach(d=>d.classList.toggle('on',parseInt(d.textContent)===v));
+  document.getElementById('norm-note').textContent='';
+}
+
+async function addReview(){
+  const c1=document.getElementById('f-cleaner1').value;
+  const c2=document.getElementById('f-cleaner2').value;
+  const ac=document.getElementById('f-accom').value;
+  const dt=document.getElementById('f-date').value;
+  const comment=document.getElementById('f-comment').value.trim();
+  if(!c1||!ac||!dt||!selectedScore){toast('Please fill all required fields!');return;}
+  const cleanerName=c2?c1+' + '+c2:c1;
+  const {error}=await db.from('reviews').insert({
+    cleaner1:c1,cleaner2:c2||null,accom:ac,date:dt,
+    score:selectedScore,platform,comment:comment||null,
+    added_by:currentUser.email
+  });
+  if(error){toast('Error: '+error.message);return;}
+  document.getElementById('f-cleaner1').value='';
+  document.getElementById('f-cleaner2').value='';
+  document.getElementById('f-accom').value='';
+  document.getElementById('f-comment').value='';
+  selectedScore=0;renderScoreInput();
+  document.getElementById('norm-note').textContent='';
+  toast('Review saved!');
+  await loadReviews();
+  showPage('reviews');
+}
+
+async function deleteReview(id){
+  if(!confirm('Delete this review? This cannot be undone.'))return;
+  const {error}=await db.from('reviews').delete().eq('id',id);
+  if(error){toast('Error: '+error.message);return;}
+  toast('Review deleted.');
+  await loadReviews();
+}
+
+function renderDashboard(){
+  const total=allReviews.length;
+  document.getElementById('m-total').textContent=total;
+  if(!total){
+    document.getElementById('m-avg').textContent='—';
+    document.getElementById('m-cleaners').textContent='0';
+    document.getElementById('m-worst').textContent='—';
+    return;
+  }
+  const avg=(allReviews.reduce((s,r)=>s+norm(r.score,r.platform),0)/total).toFixed(1);
+  document.getElementById('m-avg').textContent=avg;
+  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  document.getElementById('m-cleaners').textContent=cleaners.length;
+  let worst='—',worstAvg=Infinity;
+  cleaners.forEach(c=>{
+    const cr=allReviews.filter(r=>r.cleaner1===c);
+    const ca=cr.reduce((s,r)=>s+norm(r.score,r.platform),0)/cr.length;
+    if(ca<worstAvg){worstAvg=ca;worst=c.split(' ')[0]+' ('+ca.toFixed(1)+')';}
+  });
+  document.getElementById('m-worst').textContent=worst;
+  renderCleanerChart();
+  renderAccomChart();
+  renderTrendTabs();
+}
+
+function renderCleanerChart(){
+  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  if(!cleaners.length)return;
+  const avgs=cleaners.map(c=>{
+    const cr=allReviews.filter(r=>r.cleaner1===c);
+    return parseFloat((cr.reduce((s,r)=>s+norm(r.score,r.platform),0)/cr.length).toFixed(2));
+  });
+  const bc=cleaners.map((_,i)=>COLORS[i%COLORS.length]);
+  if(charts.cleaners)charts.cleaners.destroy();
+  charts.cleaners=new Chart(document.getElementById('c-cleaners').getContext('2d'),{
+    type:'bar',
+    data:{labels:cleaners,datasets:[{data:avgs,backgroundColor:bc.map(c=>c+'bb'),borderColor:bc,borderWidth:1.5,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:10,ticks:{stepSize:2},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false}}}}
+  });
+}
+
+function renderAccomChart(){
+  const accoms=[...new Set(allReviews.map(r=>r.accom))];
+  if(!accoms.length)return;
+  const counts=accoms.map(a=>allReviews.filter(r=>r.accom===a).length);
+  if(charts.accoms)charts.accoms.destroy();
+  charts.accoms=new Chart(document.getElementById('c-accoms').getContext('2d'),{
+    type:'bar',
+    data:{labels:accoms,datasets:[{data:counts,backgroundColor:'#d85a30bb',borderColor:'#d85a30',borderWidth:1.5,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{font:{size:11}}}}}
+  });
+}
+
+function renderTrendTabs(){
+  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  const el=document.getElementById('trend-tabs');
+  el.innerHTML='';
+  if(!cleaners.length)return;
+  if(!activeTrendCleaner||!cleaners.includes(activeTrendCleaner))activeTrendCleaner=cleaners[0];
+  cleaners.forEach(c=>{
+    const b=document.createElement('button');
+    b.style.cssText='padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:12px;font-family:DM Sans,sans-serif;color:var(--text2);';
+    if(c===activeTrendCleaner){b.style.background='var(--text)';b.style.color='var(--bg)';b.style.borderColor='var(--text)';}
+    b.textContent=c;
+    b.onclick=()=>{activeTrendCleaner=c;renderTrendTabs();renderTrendChart();};
+    el.appendChild(b);
+  });
+  renderTrendChart();
+}
+
+function renderTrendChart(){
+  if(!activeTrendCleaner)return;
+  const cr=allReviews.filter(r=>r.cleaner1===activeTrendCleaner).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!cr.length)return;
+  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  const color=COLORS[cleaners.indexOf(activeTrendCleaner)%COLORS.length];
+  const ptColors=cr.map(r=>r.platform==='airbnb'?'#FF5A5F':'#003580');
+  if(charts.trend)charts.trend.destroy();
+  charts.trend=new Chart(document.getElementById('c-trend').getContext('2d'),{
+    type:'line',
+    data:{labels:cr.map(r=>r.date),datasets:[{data:cr.map(r=>norm(r.score,r.platform)),borderColor:color,backgroundColor:color+'18',pointBackgroundColor:ptColors,pointRadius:6,fill:true,tension:0.3}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{const r=cr[ctx.dataIndex];return(r.platform==='airbnb'?'Airbnb':'Booking')+': '+r.score+' → '+norm(r.score,r.platform)+'/10';}}}},
+      scales:{y:{min:0,max:10,ticks:{stepSize:2},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{maxRotation:30}}}
+    }
+  });
+}
+
+function renderReviews(){
+  const el=document.getElementById('reviews-list');
+  const pf=document.getElementById('fp').value;
+  const cf=document.getElementById('fc').value;
+  const af=document.getElementById('fa').value;
+  let filtered=[...allReviews];
+  if(pf!=='all')filtered=filtered.filter(r=>r.platform===pf);
+  if(cf!=='all')filtered=filtered.filter(r=>r.cleaner1===cf||r.cleaner2===cf);
+  if(af!=='all')filtered=filtered.filter(r=>r.accom===af);
+  if(!filtered.length){el.innerHTML='<div class="loading">No reviews match this filter.</div>';return;}
+  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  el.innerHTML=filtered.map(r=>{
+    const ci=cleaners.indexOf(r.cleaner1)%AV_BG.length;
+    const n=norm(r.score,r.platform);
+    const displayName=r.cleaner2?r.cleaner1+' + '+r.cleaner2:r.cleaner1;
+    const raw=r.platform==='airbnb'?r.score+'/5':r.score+'/10';
+    const delBtn=isAdmin?`<button class="delbtn" onclick="deleteReview(${r.id})" title="Delete review">✕</button>`:'<span style="width:26px;"></span>';
+    return `<div class="review-item">
+      <div class="av" style="background:${AV_BG[ci]};color:${AV_TX[ci]}">${initials(r.cleaner1)}</div>
+      <div class="rinfo">
+        <div class="rname">${displayName}</div>
+        <div class="rsub">${r.accom} · ${r.date}</div>
+        ${r.comment?`<div class="rcomment">"${r.comment}"</div>`:''}
+        <div class="radded">Added by ${r.added_by||'unknown'}</div>
+      </div>
+      <span class="ppill ${r.platform==='airbnb'?'pill-a':'pill-b'}">${r.platform==='airbnb'?'Airbnb':'Book.'}</span>
+      <span class="sbadge ${scoreClass(n)}">${raw} <span style="opacity:0.55;font-size:10px;">${n}/10</span></span>
+      ${delBtn}
+    </div>`;
+  }).join('');
+}
+
+async function addCleaner(){
+  const name=document.getElementById('new-cleaner').value.trim();
+  if(!name)return;
+  const {error}=await db.from('cleaners').insert({name});
+  if(error){toast('Error: '+error.message);return;}
+  document.getElementById('new-cleaner').value='';
+  toast('Cleaner added!');
+  await loadCleaners();
+}
+
+async function deleteCleaner(id){
+  if(!confirm('Remove this cleaner?'))return;
+  await db.from('cleaners').delete().eq('id',id);
+  await loadCleaners();
+}
+
+async function addAccom(){
+  const name=document.getElementById('new-accom').value.trim();
+  if(!name)return;
+  const {error}=await db.from('accommodations').insert({name});
+  if(error){toast('Error: '+error.message);return;}
+  document.getElementById('new-accom').value='';
+  toast('Accommodation added!');
+  await loadAccoms();
+}
+
+async function deleteAccom(id){
+  if(!confirm('Remove this accommodation?'))return;
+  await db.from('accommodations').delete().eq('id',id);
+  await loadAccoms();
+}
+
+function renderCleanerTags(){
+  const el=document.getElementById('cleaners-list');
+  if(!el)return;
+  el.innerHTML=cleanersList.map(c=>`<div class="tag">${c.name}<button class="tag-del" onclick="deleteCleaner(${c.id})">✕</button></div>`).join('');
+}
+
+function renderAccomTags(){
+  const el=document.getElementById('accoms-list');
+  if(!el)return;
+  el.innerHTML=accomsList.map(a=>`<div class="tag">${a.name}<button class="tag-del" onclick="deleteAccom(${a.id})">✕</button></div>`).join('');
+}
+
+async function loadTeam(){
+  const {data:users}=await db.from('user_roles').select('user_id,role');
+  const {data:authUsers}=await db.auth.admin?.listUsers()||{data:null};
+  const el=document.getElementById('team-list');
+  if(!users){el.innerHTML='<div class="loading">Could not load team.</div>';return;}
+  el.innerHTML=users.map((u,i)=>{
+    const ci=i%AV_BG.length;
+    return `<div class="team-row">
+      <div class="av" style="background:${AV_BG[ci]};color:${AV_TX[ci]}">${u.user_id.slice(0,2).toUpperCase()}</div>
+      <div style="flex:1;"><div class="rname">${u.user_id.slice(0,8)}...</div></div>
+      <span class="role-badge ${u.role==='admin'?'role-admin':'role-user'}">${u.role}</span>
+    </div>`;
+  }).join('');
+}
+
+function showPage(p){
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  const navMap={dashboard:0,add:1,reviews:2,settings:3};
+  const navItems=document.querySelectorAll('.nav-item');
+  if(navMap[p]!==undefined&&navItems[navMap[p]])navItems[navMap[p]].classList.add('active');
+  if(p==='settings')loadTeam();
+}
+
+// Init
+document.getElementById('f-date').value=new Date().toISOString().slice(0,10);
+renderScoreInput();
+
+db.auth.getSession().then(({data:{session}})=>{
+  if(session)initApp(session.user);
+});
+</script>
+</body>
+</html>
