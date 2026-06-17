@@ -321,19 +321,14 @@ function getCleanerStats(){
 
   const stats = {};
 
-  allReviews.forEach(r => {
+  allReviews.forEach(r=>{
 
-    const cleaners = [
-      r.cleaner1,
-      r.cleaner2
-    ].filter(Boolean);
+    const cleaners=[r.cleaner1,r.cleaner2].filter(Boolean);
 
-    cleaners.forEach(name => {
+    cleaners.forEach(name=>{
 
       if(!stats[name]){
-        stats[name] = {
-          reviewCount: 0
-        };
+        stats[name]={reviewCount:0};
       }
 
       stats[name].reviewCount += 1;
@@ -493,37 +488,36 @@ async function deleteReview(id){
 }
 
 function renderDashboard(){
+
   const total=allReviews.length;
+
   document.getElementById('m-total').textContent=total;
+
   if(!total){
     document.getElementById('m-avg').textContent='—';
     document.getElementById('m-cleaners').textContent='0';
     document.getElementById('m-worst').textContent='—';
     return;
   }
-  const avg=(allReviews.reduce((s,r)=>s+norm(r.score,r.platform),0)/total).toFixed(1);
-  document.getElementById('m-avg').textContent=avg;
+
+  document.getElementById('m-avg').textContent=total;
+
   const stats=getCleanerStats();
 
-  document.getElementById('m-cleaners').textContent=
-    Object.keys(stats).length;
+  document.getElementById('m-cleaners').textContent=Object.keys(stats).length;
 
   let worst='—';
-  let worstAvg=Infinity;
+  let maxReviews=0;
 
   Object.entries(stats).forEach(([name,data])=>{
-
-    const avg=
-      data.totalScore/
-      data.reviewCount;
-
-    if(avg<worstAvg){
-      worstAvg=avg;
-      worst=`${name} (${avg.toFixed(1)})`;
+    if(data.reviewCount>maxReviews){
+      maxReviews=data.reviewCount;
+      worst=`${name} (${data.reviewCount})`;
     }
-
   });
+
   document.getElementById('m-worst').textContent=worst;
+
   renderCleanerChart();
   renderAccomChart();
   renderTrendTabs();
@@ -537,21 +531,11 @@ function renderCleanerChart(){
 
   if(!cleaners.length)return;
 
-  const avgs=cleaners.map(name=>
-    Number(
-      (
-        stats[name].totalScore/
-        stats[name].reviewCount
-      ).toFixed(2)
-    )
-  );
+  const counts=cleaners.map(name=>stats[name].reviewCount);
 
-  const bc=cleaners.map(
-    (_,i)=>COLORS[i%COLORS.length]
-  );
+  const bc=cleaners.map((_,i)=>COLORS[i%COLORS.length]);
 
-  if(charts.cleaners)
-    charts.cleaners.destroy();
+  if(charts.cleaners) charts.cleaners.destroy();
 
   charts.cleaners=new Chart(
     document.getElementById('c-cleaners').getContext('2d'),
@@ -560,7 +544,8 @@ function renderCleanerChart(){
       data:{
         labels:cleaners,
         datasets:[{
-          data:avgs,
+          label:'Bad Reviews',
+          data:counts,
           backgroundColor:bc.map(c=>c+'bb'),
           borderColor:bc,
           borderWidth:1.5,
@@ -570,19 +555,10 @@ function renderCleanerChart(){
       options:{
         responsive:true,
         maintainAspectRatio:false,
-        plugins:{
-          legend:{display:false}
-        },
+        plugins:{legend:{display:false}},
         scales:{
-          y:{
-            min:0,
-            max:10,
-            ticks:{stepSize:2},
-            grid:{color:'rgba(0,0,0,0.05)'}
-          },
-          x:{
-            grid:{display:false}
-          }
+          y:{beginAtZero:true,ticks:{stepSize:1}},
+          x:{grid:{display:false}}
         }
       }
     }
@@ -807,4 +783,3 @@ db.auth.getSession().then(({data:{session}})=>{
 </script>
 </body>
 </html>
-
