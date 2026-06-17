@@ -317,6 +317,37 @@ let activeTrendCleaner = null;
 let charts = {};
 
 function norm(s,p){return p==='airbnb'?s*2:s;}
+function getCleanerStats(){
+
+  const stats={};
+
+  allReviews.forEach(r=>{
+
+    const cleaners=[
+      r.cleaner1,
+      r.cleaner2
+    ].filter(Boolean);
+
+    const score=norm(r.score,r.platform);
+
+    cleaners.forEach(name=>{
+
+      if(!stats[name]){
+        stats[name]={
+          totalScore:0,
+          reviewCount:0
+        };
+      }
+
+      stats[name].totalScore+=score;
+      stats[name].reviewCount+=1;
+
+    });
+
+  });
+
+  return stats;
+}
 function initials(n){return n.split(/[\s+]+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);}
 function scoreClass(n){return n<=4?'s-low':n<=6?'s-mid':'s-high';}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
@@ -476,13 +507,25 @@ function renderDashboard(){
   }
   const avg=(allReviews.reduce((s,r)=>s+norm(r.score,r.platform),0)/total).toFixed(1);
   document.getElementById('m-avg').textContent=avg;
-  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
-  document.getElementById('m-cleaners').textContent=cleaners.length;
-  let worst='—',worstAvg=Infinity;
-  cleaners.forEach(c=>{
-    const cr=allReviews.filter(r=>r.cleaner1===c);
-    const ca=cr.reduce((s,r)=>s+norm(r.score,r.platform),0)/cr.length;
-    if(ca<worstAvg){worstAvg=ca;worst=c.split(' ')[0]+' ('+ca.toFixed(1)+')';}
+  const stats=getCleanerStats();
+
+  document.getElementById('m-cleaners').textContent=
+    Object.keys(stats).length;
+
+  let worst='—';
+  let worstAvg=Infinity;
+
+  Object.entries(stats).forEach(([name,data])=>{
+
+    const avg=
+      data.totalScore/
+      data.reviewCount;
+
+    if(avg<worstAvg){
+      worstAvg=avg;
+      worst=`${name} (${avg.toFixed(1)})`;
+    }
+
   });
   document.getElementById('m-worst').textContent=worst;
   renderCleanerChart();
@@ -491,19 +534,63 @@ function renderDashboard(){
 }
 
 function renderCleanerChart(){
-  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+
+  const stats=getCleanerStats();
+
+  const cleaners=Object.keys(stats);
+
   if(!cleaners.length)return;
-  const avgs=cleaners.map(c=>{
-    const cr=allReviews.filter(r=>r.cleaner1===c);
-    return parseFloat((cr.reduce((s,r)=>s+norm(r.score,r.platform),0)/cr.length).toFixed(2));
-  });
-  const bc=cleaners.map((_,i)=>COLORS[i%COLORS.length]);
-  if(charts.cleaners)charts.cleaners.destroy();
-  charts.cleaners=new Chart(document.getElementById('c-cleaners').getContext('2d'),{
-    type:'bar',
-    data:{labels:cleaners,datasets:[{data:avgs,backgroundColor:bc.map(c=>c+'bb'),borderColor:bc,borderWidth:1.5,borderRadius:6}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:10,ticks:{stepSize:2},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false}}}}
-  });
+
+  const avgs=cleaners.map(name=>
+    Number(
+      (
+        stats[name].totalScore/
+        stats[name].reviewCount
+      ).toFixed(2)
+    )
+  );
+
+  const bc=cleaners.map(
+    (_,i)=>COLORS[i%COLORS.length]
+  );
+
+  if(charts.cleaners)
+    charts.cleaners.destroy();
+
+  charts.cleaners=new Chart(
+    document.getElementById('c-cleaners').getContext('2d'),
+    {
+      type:'bar',
+      data:{
+        labels:cleaners,
+        datasets:[{
+          data:avgs,
+          backgroundColor:bc.map(c=>c+'bb'),
+          borderColor:bc,
+          borderWidth:1.5,
+          borderRadius:6
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false}
+        },
+        scales:{
+          y:{
+            min:0,
+            max:10,
+            ticks:{stepSize:2},
+            grid:{color:'rgba(0,0,0,0.05)'}
+          },
+          x:{
+            grid:{display:false}
+          }
+        }
+      }
+    }
+  );
 }
 
 function renderAccomChart(){
@@ -519,7 +606,7 @@ function renderAccomChart(){
 }
 
 function renderTrendTabs(){
-  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  const cleaners=Object.keys(getCleanerStats());
   const el=document.getElementById('trend-tabs');
   el.innerHTML='';
   if(!cleaners.length)return;
@@ -537,9 +624,9 @@ function renderTrendTabs(){
 
 function renderTrendChart(){
   if(!activeTrendCleaner)return;
-  const cr=allReviews.filter(r=>r.cleaner1===activeTrendCleaner).sort((a,b)=>a.date.localeCompare(b.date));
+  const cr=allReviews.filter(r => r.cleaner1===activeTrendCleaner || r.cleaner2===activeTrendCleaner).sort((a,b)=>a.date.localeCompare(b.date));
   if(!cr.length)return;
-  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  const cleaners=Object.keys(getCleanerStats());
   const color=COLORS[cleaners.indexOf(activeTrendCleaner)%COLORS.length];
   const ptColors=cr.map(r=>r.platform==='airbnb'?'#FF5A5F':'#003580');
   if(charts.trend)charts.trend.destroy();
