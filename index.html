@@ -182,14 +182,14 @@
       <div class="page-header"><div class="page-title">Dashboard</div></div>
       <div class="metrics">
         <div class="metric"><div class="metric-label">Total reviews</div><div class="metric-val" id="m-total">—</div></div>
-        <div class="metric"><div class="metric-label">Avg score</div><div class="metric-val" id="m-avg">—</div><div class="metric-sub">out of 10</div></div>
+        <div class="metric"><div class="metric-label">Bad reviews</div><div class="metric-val" id="m-avg">—</div><div class="metric-sub">out of 10</div></div>
         <div class="metric"><div class="metric-label">Cleaners</div><div class="metric-val" id="m-cleaners">—</div></div>
-        <div class="metric"><div class="metric-label">Worst avg</div><div class="metric-val" id="m-worst" style="font-size:16px;color:var(--low);">—</div></div>
+        <div class="metric"><div class="metric-label">Most complaints</div><div class="metric-val" id="m-worst" style="font-size:16px;color:var(--low);">—</div></div>
       </div>
       <div class="charts-grid">
         <div class="card">
-          <div class="card-title">Avg score per cleaner (normalized /10)</div>
-          <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Airbnb ×2 to match Booking.com scale · <span style="color:var(--airbnb);">● Airbnb</span> <span style="color:var(--booking);margin-left:6px;">● Booking</span></div>
+          <div class="card-title">Bad reviews per cleaner</div>
+          
           <div class="chart-wrap"><canvas id="c-cleaners" role="img" aria-label="Bar chart average score per cleaner"></canvas></div>
         </div>
         <div class="card">
@@ -319,28 +319,24 @@ let charts = {};
 function norm(s,p){return p==='airbnb'?s*2:s;}
 function getCleanerStats(){
 
-  const stats={};
+  const stats = {};
 
-  allReviews.forEach(r=>{
+  allReviews.forEach(r => {
 
-    const cleaners=[
+    const cleaners = [
       r.cleaner1,
       r.cleaner2
     ].filter(Boolean);
 
-    const score=norm(r.score,r.platform);
-
-    cleaners.forEach(name=>{
+    cleaners.forEach(name => {
 
       if(!stats[name]){
-        stats[name]={
-          totalScore:0,
-          reviewCount:0
+        stats[name] = {
+          reviewCount: 0
         };
       }
 
-      stats[name].totalScore+=score;
-      stats[name].reviewCount+=1;
+      stats[name].reviewCount += 1;
 
     });
 
@@ -811,3 +807,4 @@ db.auth.getSession().then(({data:{session}})=>{
 </script>
 </body>
 </html>
+
