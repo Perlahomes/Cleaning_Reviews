@@ -76,6 +76,7 @@
   .ptab{flex:1;padding:9px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;border:none;background:transparent;color:var(--text2);transition:all 0.15s;}
   .ptab.ab{background:var(--airbnb);color:#fff;}
   .ptab.bk{background:var(--booking);color:#fff;}
+  .ptab.on{background:var(--accent);color:#fff;}
 
   /* STARS / DOTS */
   .stars{display:flex;gap:4px;margin-top:3px;}
@@ -180,12 +181,19 @@
 
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
-      <div class="page-header"><div class="page-title">Dashboard</div></div>
+      <div class="page-header">
+        <div class="page-title">Dashboard</div>
+        <div class="platform-toggle" id="range-toggle" style="width:auto;margin-bottom:0;">
+          <button class="ptab" data-range="30" onclick="setRange('30')">30 days</button>
+          <button class="ptab" data-range="90" onclick="setRange('90')">90 days</button>
+          <button class="ptab on" data-range="all" onclick="setRange('all')">All time</button>
+        </div>
+      </div>
       <div class="metrics">
         <div class="metric"><div class="metric-label">Total reviews</div><div class="metric-val" id="m-total">—</div></div>
         <div class="metric"><div class="metric-label">Average score</div><div class="metric-val" id="m-avg">—</div><div class="metric-sub">out of 10</div></div>
-        <div class="metric"><div class="metric-label">Most good reviews</div><div class="metric-val" id="m-mostgood" style="font-size:16px;color:var(--high);">—</div><div class="metric-sub">5★ / 10 only</div></div>
-        <div class="metric"><div class="metric-label">Most bad reviews</div><div class="metric-val" id="m-mostbad" style="font-size:16px;color:var(--low);">—</div><div class="metric-sub">anything lower</div></div>
+        <div class="metric"><div class="metric-label">Most good reviews</div><div class="metric-val" id="m-mostgood" style="font-size:16px;color:var(--high);">—</div><div class="metric-sub" id="m-mostgood-sub">5★ / 10 only</div></div>
+        <div class="metric"><div class="metric-label">Most bad reviews</div><div class="metric-val" id="m-mostbad" style="font-size:16px;color:var(--low);">—</div><div class="metric-sub" id="m-mostbad-sub">anything lower</div></div>
       </div>
       <div class="charts-grid">
         <div class="card">
@@ -193,9 +201,13 @@
           <div class="chart-wrap"><canvas id="c-cleaners" role="img" aria-label="Stacked bar chart of good and bad reviews per cleaner"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-title">Average score per cleaner (/10)</div>
-          <div class="chart-wrap"><canvas id="c-avg" role="img" aria-label="Bar chart of average score per cleaner"></canvas></div>
+          <div class="card-title">Bad-review rate per cleaner (%)</div>
+          <div class="chart-wrap"><canvas id="c-rate" role="img" aria-label="Bar chart of bad review rate per cleaner"></canvas></div>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Average score per cleaner (/10)</div>
+        <div class="chart-wrap"><canvas id="c-avg" role="img" aria-label="Bar chart of average score per cleaner"></canvas></div>
       </div>
       <div class="card">
         <div class="card-title">Reviews per accommodation</div>
@@ -320,6 +332,11 @@ let platform = 'airbnb';
 let selectedScore = 0;
 let activeTrendCleaner = null;
 let charts = {};
+let dateRange = 'all'; // 'all' | '30' | '90'
+
+// If a review names two cleaners, each is held fully accountable by default.
+// Set this to true to split the blame 0.5 each instead.
+const SPLIT_SHARED_BLAME = false;
 
 function norm(s,p){return p==='airbnb'?s*2:s;}
 // A "good" review is a perfect score only: 10/10 on Booking, 5 stars on Airbnb.
@@ -327,20 +344,39 @@ function norm(s,p){return p==='airbnb'?s*2:s;}
 function isGood(r){return norm(r.score,r.platform)>=10;}
 function isBad(r){return !isGood(r);}
 
-function getCleanerStats(){
+// Reviews scoped to the dashboard's selected date range.
+function scopedReviews(){
+  if(dateRange==='all') return allReviews;
+  const days = dateRange==='30' ? 30 : 90;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate()-days);
+  const c = cutoff.toISOString().slice(0,10);
+  return allReviews.filter(r=>r.date>=c);
+}
+
+function getCleanerStats(reviews){
+  reviews = reviews || scopedReviews();
   const stats = {};
-  allReviews.forEach(r=>{
+  const share = SPLIT_SHARED_BLAME ? null : 1; // weight handled below
+  reviews.forEach(r=>{
     const cleaners=[r.cleaner1,r.cleaner2].filter(Boolean);
     const ns=norm(r.score,r.platform);
+    const w = SPLIT_SHARED_BLAME ? 1/cleaners.length : 1;
     cleaners.forEach(name=>{
       if(!stats[name]){
         stats[name]={reviewCount:0,badCount:0,goodCount:0,scoreSum:0};
       }
-      stats[name].reviewCount += 1;
-      stats[name].scoreSum += ns;
-      if(ns>=10) stats[name].goodCount += 1;
-      else stats[name].badCount += 1;
+      stats[name].reviewCount += w;
+      stats[name].scoreSum += ns*w;
+      if(ns>=10) stats[name].goodCount += w;
+      else stats[name].badCount += w;
     });
+  });
+  // derived rates
+  Object.values(stats).forEach(s=>{
+    s.badRate  = s.reviewCount ? s.badCount  / s.reviewCount : 0;
+    s.goodRate = s.reviewCount ? s.goodCount / s.reviewCount : 0;
+    s.avg      = s.reviewCount ? s.scoreSum  / s.reviewCount : 0;
   });
   return stats;
 }
@@ -492,34 +528,65 @@ async function deleteReview(id){
   await loadReviews();
 }
 
+function setRange(r){
+  dateRange=r;
+  document.querySelectorAll('#range-toggle .ptab').forEach(b=>b.classList.toggle('on',b.dataset.range===r));
+  activeTrendCleaner=null;
+  renderDashboard();
+}
+
+// counts may be fractional when blame is split; show them cleanly
+function fmtCount(n){return Number.isInteger(n)?n:(+n.toFixed(1));}
+
 function renderDashboard(){
 
-  const total=allReviews.length;
+  const rev=scopedReviews();
+  const total=rev.length;
   document.getElementById('m-total').textContent=total;
+
+  const goodSub=document.getElementById('m-mostgood-sub');
+  const badSub=document.getElementById('m-mostbad-sub');
 
   if(!total){
     document.getElementById('m-avg').textContent='—';
     document.getElementById('m-mostgood').textContent='—';
     document.getElementById('m-mostbad').textContent='—';
+    goodSub.textContent='5★ / 10 only';
+    badSub.textContent='anything lower';
+    renderCleanerChart();renderRateChart();renderAvgChart();renderAccomChart();renderTrendTabs();
     return;
   }
 
-  const normScores=allReviews.map(r=>norm(r.score,r.platform));
+  const normScores=rev.map(r=>norm(r.score,r.platform));
   const avg=normScores.reduce((a,b)=>a+b,0)/total;
   document.getElementById('m-avg').textContent=avg.toFixed(1);
 
-  const stats=getCleanerStats();
+  const stats=getCleanerStats(rev);
 
-  let bestGood='None',maxGood=0;
-  let worstBad='None',maxBad=0;
-  Object.entries(stats).forEach(([name,data])=>{
-    if(data.goodCount>maxGood){maxGood=data.goodCount;bestGood=`${name} (${data.goodCount})`;}
-    if(data.badCount>maxBad){maxBad=data.badCount;worstBad=`${name} (${data.badCount})`;}
+  let bestGood=null,maxGood=0;
+  let worstBad=null,maxBad=0;
+  Object.entries(stats).forEach(([name,d])=>{
+    if(d.goodCount>maxGood){maxGood=d.goodCount;bestGood=[name,d];}
+    if(d.badCount>maxBad){maxBad=d.badCount;worstBad=[name,d];}
   });
-  document.getElementById('m-mostgood').textContent=maxGood?bestGood:'None';
-  document.getElementById('m-mostbad').textContent=maxBad?worstBad:'None';
+
+  if(bestGood){
+    document.getElementById('m-mostgood').textContent=`${bestGood[0]} (${fmtCount(bestGood[1].goodCount)})`;
+    goodSub.textContent=Math.round(bestGood[1].goodRate*100)+'% of their reviews';
+  }else{
+    document.getElementById('m-mostgood').textContent='None';
+    goodSub.textContent='5★ / 10 only';
+  }
+  if(worstBad){
+    document.getElementById('m-mostbad').textContent=`${worstBad[0]} (${fmtCount(worstBad[1].badCount)})`;
+    badSub.textContent=Math.round(worstBad[1].badRate*100)+'% of their reviews';
+  }else{
+    document.getElementById('m-mostbad').textContent='None';
+    badSub.textContent='anything lower';
+  }
 
   renderCleanerChart();
+  renderRateChart();
   renderAvgChart();
   renderAccomChart();
   renderTrendTabs();
@@ -527,11 +594,11 @@ function renderDashboard(){
 
 function renderCleanerChart(){
   const stats=getCleanerStats();
-  const cleaners=Object.keys(stats);
-  if(!cleaners.length)return;
-  const good=cleaners.map(n=>stats[n].goodCount);
-  const bad=cleaners.map(n=>stats[n].badCount);
+  const cleaners=Object.keys(stats).sort((a,b)=>(stats[b].badCount-stats[a].badCount)||(stats[b].reviewCount-stats[a].reviewCount));
   if(charts.cleaners) charts.cleaners.destroy();
+  if(!cleaners.length)return;
+  const good=cleaners.map(n=>+stats[n].goodCount.toFixed(2));
+  const bad=cleaners.map(n=>+stats[n].badCount.toFixed(2));
   charts.cleaners=new Chart(document.getElementById('c-cleaners').getContext('2d'),{
     type:'bar',
     data:{
@@ -549,11 +616,33 @@ function renderCleanerChart(){
   });
 }
 
+function renderRateChart(){
+  const stats=getCleanerStats();
+  // sort worst-first; small sample sizes are unreliable so flag them
+  const entries=Object.entries(stats).sort((a,b)=>b[1].badRate-a[1].badRate);
+  if(charts.rate) charts.rate.destroy();
+  if(!entries.length)return;
+  const labels=entries.map(([n])=>n);
+  const rates=entries.map(([,d])=>+(d.badRate*100).toFixed(0));
+  // grey out cleaners with very few reviews (under 3) since their % is noisy
+  const colors=entries.map(([,d])=>d.reviewCount<3?'#b9b4ad':'#c0392b');
+  charts.rate=new Chart(document.getElementById('c-rate').getContext('2d'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'% bad',data:rates,backgroundColor:colors.map(c=>c+'bb'),borderColor:colors,borderWidth:1.5,borderRadius:6}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{const d=entries[ctx.dataIndex][1];return ctx.parsed.y+'% bad ('+fmtCount(+d.badCount.toFixed(1))+'/'+fmtCount(+d.reviewCount.toFixed(1))+')'+(d.reviewCount<3?' — few reviews':'');}}}},
+      scales:{y:{min:0,max:100,ticks:{stepSize:20,callback:v=>v+'%'},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false}}}
+    }
+  });
+}
+
 function renderAvgChart(){
   const stats=getCleanerStats();
-  const cleaners=Object.keys(stats);
+  const cleaners=Object.keys(stats).sort((a,b)=>stats[b].avg-stats[a].avg);
+  if(charts.avg) charts.avg.destroy();
   if(!cleaners.length)return;
-  const avgs=cleaners.map(n=>+(stats[n].scoreSum/stats[n].reviewCount).toFixed(2));
+  const avgs=cleaners.map(n=>+stats[n].avg.toFixed(2));
   const bc=cleaners.map((_,i)=>COLORS[i%COLORS.length]);
   if(charts.avg) charts.avg.destroy();
   charts.avg=new Chart(document.getElementById('c-avg').getContext('2d'),{
@@ -568,10 +657,14 @@ function renderAvgChart(){
 }
 
 function renderAccomChart(){
-  const accoms=[...new Set(allReviews.map(r=>r.accom))];
-  if(!accoms.length)return;
-  const counts=accoms.map(a=>allReviews.filter(r=>r.accom===a).length);
+  const rev=scopedReviews();
+  const pairs=[...new Set(rev.map(r=>r.accom))]
+    .map(a=>[a, rev.filter(r=>r.accom===a).length])
+    .sort((x,y)=>y[1]-x[1]);
   if(charts.accoms)charts.accoms.destroy();
+  if(!pairs.length)return;
+  const accoms=pairs.map(p=>p[0]);
+  const counts=pairs.map(p=>p[1]);
   charts.accoms=new Chart(document.getElementById('c-accoms').getContext('2d'),{
     type:'bar',
     data:{labels:accoms,datasets:[{label:'Reviews',data:counts,backgroundColor:'#3266adbb',borderColor:'#3266ad',borderWidth:1.5,borderRadius:6}]},
@@ -598,7 +691,8 @@ function renderTrendTabs(){
 
 function renderTrendChart(){
   if(!activeTrendCleaner)return;
-  const cr=allReviews.filter(r => r.cleaner1===activeTrendCleaner || r.cleaner2===activeTrendCleaner).sort((a,b)=>a.date.localeCompare(b.date));
+  const cr=scopedReviews().filter(r => r.cleaner1===activeTrendCleaner || r.cleaner2===activeTrendCleaner).sort((a,b)=>a.date.localeCompare(b.date));
+  if(charts.trend)charts.trend.destroy();
   if(!cr.length)return;
   const cleaners=Object.keys(getCleanerStats());
   const color=COLORS[cleaners.indexOf(activeTrendCleaner)%COLORS.length];
