@@ -59,7 +59,7 @@
   .page-title{font-size:20px;font-weight:500;}
 
   /* METRICS */
-  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem;}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:1.5rem;}
   .metric{background:var(--surface2);border-radius:var(--radius);padding:14px;}
   .metric-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;}
   .metric-val{font-size:26px;font-weight:500;font-family:'DM Mono',monospace;}
@@ -89,8 +89,8 @@
   .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 
   /* REVIEWS LIST */
-  .filter-row{display:flex;gap:8px;margin-bottom:1rem;}
-  .filter-row select{flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface);color:var(--text);}
+  .filter-row{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;}
+  .filter-row select{flex:1;min-width:120px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface);color:var(--text);}
   .review-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--surface2);}
   .review-item:last-child{border-bottom:none;}
   .av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;margin-top:1px;}
@@ -106,6 +106,9 @@
   .s-low{background:#fde8e8;color:var(--low);}
   .s-mid{background:#faeeda;color:var(--mid);}
   .s-high{background:#eaf3de;color:var(--high);}
+  .rtag{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;}
+  .rtag-good{background:#eaf3de;color:var(--high);}
+  .rtag-bad{background:#fde8e8;color:var(--low);}
   .delbtn{background:none;border:none;cursor:pointer;color:var(--text2);font-size:16px;padding:3px 6px;border-radius:5px;transition:all 0.12s;flex-shrink:0;}
   .delbtn:hover{background:#fde8e8;color:var(--low);}
 
@@ -135,7 +138,6 @@
   @media(max-width:700px){
     .sidebar{width:100%;height:auto;position:relative;flex-direction:row;flex-wrap:wrap;}
     .main-content{margin-left:0;}
-    .metrics{grid-template-columns:1fr 1fr;}
     .charts-grid{grid-template-columns:1fr;}
     .form-row{grid-template-columns:1fr;}
   }
@@ -181,19 +183,23 @@
       <div class="page-header"><div class="page-title">Dashboard</div></div>
       <div class="metrics">
         <div class="metric"><div class="metric-label">Total reviews</div><div class="metric-val" id="m-total">—</div></div>
-        <div class="metric"><div class="metric-label">Accommodations affected</div><div class="metric-val" id="m-accoms">—</div><div class="metric-sub">with complaints</div></div>
-        <div class="metric"><div class="metric-label">Cleaners</div><div class="metric-val" id="m-cleaners">—</div></div>
-        <div class="metric"><div class="metric-label">Most bad reviews</div><div class="metric-val" id="m-worst" style="font-size:16px;color:var(--low);">—</div></div>
+        <div class="metric"><div class="metric-label">Average score</div><div class="metric-val" id="m-avg">—</div><div class="metric-sub">out of 10</div></div>
+        <div class="metric"><div class="metric-label">Most good reviews</div><div class="metric-val" id="m-mostgood" style="font-size:16px;color:var(--high);">—</div><div class="metric-sub">5★ / 10 only</div></div>
+        <div class="metric"><div class="metric-label">Most bad reviews</div><div class="metric-val" id="m-mostbad" style="font-size:16px;color:var(--low);">—</div><div class="metric-sub">anything lower</div></div>
       </div>
       <div class="charts-grid">
         <div class="card">
-          <div class="card-title">Bad reviews per cleaner</div>
-          <div class="chart-wrap"><canvas id="c-cleaners" role="img" aria-label="Bar chart of bad reviews per cleaner"></canvas></div>
+          <div class="card-title">Good vs bad reviews per cleaner</div>
+          <div class="chart-wrap"><canvas id="c-cleaners" role="img" aria-label="Stacked bar chart of good and bad reviews per cleaner"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-title">Bad reviews per accommodation</div>
-          <div class="chart-wrap"><canvas id="c-accoms" role="img" aria-label="Bar chart reviews per accommodation"></canvas></div>
+          <div class="card-title">Average score per cleaner (/10)</div>
+          <div class="chart-wrap"><canvas id="c-avg" role="img" aria-label="Bar chart of average score per cleaner"></canvas></div>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Reviews per accommodation</div>
+        <div class="chart-wrap"><canvas id="c-accoms" role="img" aria-label="Bar chart reviews per accommodation"></canvas></div>
       </div>
       <div class="card">
         <div class="card-title">Score trend over time</div>
@@ -243,6 +249,7 @@
       <div class="card">
         <div class="filter-row">
           <select id="fp" onchange="renderReviews()"><option value="all">All platforms</option><option value="airbnb">Airbnb</option><option value="booking">Booking.com</option></select>
+          <select id="fr" onchange="renderReviews()"><option value="all">Good &amp; bad</option><option value="good">Good only</option><option value="bad">Bad only</option></select>
           <select id="fc" onchange="renderReviews()"><option value="all">All cleaners</option></select>
           <select id="fa" onchange="renderReviews()"><option value="all">All accommodations</option></select>
         </div>
@@ -315,26 +322,26 @@ let activeTrendCleaner = null;
 let charts = {};
 
 function norm(s,p){return p==='airbnb'?s*2:s;}
+// A "good" review is a perfect score only: 10/10 on Booking, 5 stars on Airbnb.
+// Everything else counts as bad.
+function isGood(r){return norm(r.score,r.platform)>=10;}
+function isBad(r){return !isGood(r);}
+
 function getCleanerStats(){
-
   const stats = {};
-
   allReviews.forEach(r=>{
-
     const cleaners=[r.cleaner1,r.cleaner2].filter(Boolean);
-
+    const ns=norm(r.score,r.platform);
     cleaners.forEach(name=>{
-
       if(!stats[name]){
-        stats[name]={reviewCount:0};
+        stats[name]={reviewCount:0,badCount:0,goodCount:0,scoreSum:0};
       }
-
       stats[name].reviewCount += 1;
-
+      stats[name].scoreSum += ns;
+      if(ns>=10) stats[name].goodCount += 1;
+      else stats[name].badCount += 1;
     });
-
   });
-
   return stats;
 }
 function initials(n){return n.split(/[\s+]+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);}
@@ -443,13 +450,14 @@ function renderScoreInput(){
 function setStar(v){
   selectedScore=v;
   document.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('on',i<v));
-  document.getElementById('norm-note').textContent='→ Normalized to '+(v*2)+'/10';
+  const n=v*2;
+  document.getElementById('norm-note').textContent='→ Normalized to '+n+'/10  ('+(n>=10?'good':'bad')+' review)';
 }
 
 function setBDot(v){
   selectedScore=v;
   document.querySelectorAll('.bdot').forEach(d=>d.classList.toggle('on',parseInt(d.textContent)===v));
-  document.getElementById('norm-note').textContent='';
+  document.getElementById('norm-note').textContent=(v>=10?'good':'bad')+' review';
 }
 
 async function addReview(){
@@ -459,7 +467,6 @@ async function addReview(){
   const dt=document.getElementById('f-date').value;
   const comment=document.getElementById('f-comment').value.trim();
   if(!c1||!ac||!dt||!selectedScore){toast('Please fill all required fields!');return;}
-  const cleanerName=c2?c1+' + '+c2:c1;
   const {error}=await db.from('reviews').insert({
     cleaner1:c1,cleaner2:c2||null,accom:ac,date:dt,
     score:selectedScore,platform,comment:comment||null,
@@ -488,80 +495,76 @@ async function deleteReview(id){
 function renderDashboard(){
 
   const total=allReviews.length;
-
   document.getElementById('m-total').textContent=total;
 
   if(!total){
-    document.getElementById('m-accoms').textContent='0';
-    document.getElementById('m-cleaners').textContent='0';
-    document.getElementById('m-worst').textContent='—';
+    document.getElementById('m-avg').textContent='—';
+    document.getElementById('m-mostgood').textContent='—';
+    document.getElementById('m-mostbad').textContent='—';
     return;
   }
 
-  const accomCount=new Set(allReviews.map(r=>r.accom)).size;
-  document.getElementById('m-accoms').textContent=accomCount;
+  const normScores=allReviews.map(r=>norm(r.score,r.platform));
+  const avg=normScores.reduce((a,b)=>a+b,0)/total;
+  document.getElementById('m-avg').textContent=avg.toFixed(1);
 
   const stats=getCleanerStats();
 
-  document.getElementById('m-cleaners').textContent=Object.keys(stats).length;
-
-  let worst='—';
-  let maxReviews=0;
-
+  let bestGood='None',maxGood=0;
+  let worstBad='None',maxBad=0;
   Object.entries(stats).forEach(([name,data])=>{
-    if(data.reviewCount>maxReviews){
-      maxReviews=data.reviewCount;
-      worst=`${name} (${data.reviewCount})`;
-    }
+    if(data.goodCount>maxGood){maxGood=data.goodCount;bestGood=`${name} (${data.goodCount})`;}
+    if(data.badCount>maxBad){maxBad=data.badCount;worstBad=`${name} (${data.badCount})`;}
   });
-
-  document.getElementById('m-worst').textContent=worst;
+  document.getElementById('m-mostgood').textContent=maxGood?bestGood:'None';
+  document.getElementById('m-mostbad').textContent=maxBad?worstBad:'None';
 
   renderCleanerChart();
+  renderAvgChart();
   renderAccomChart();
   renderTrendTabs();
 }
 
 function renderCleanerChart(){
-
   const stats=getCleanerStats();
-
   const cleaners=Object.keys(stats);
-
   if(!cleaners.length)return;
-
-  const counts=cleaners.map(name=>stats[name].reviewCount);
-
-  const bc=cleaners.map((_,i)=>COLORS[i%COLORS.length]);
-
+  const good=cleaners.map(n=>stats[n].goodCount);
+  const bad=cleaners.map(n=>stats[n].badCount);
   if(charts.cleaners) charts.cleaners.destroy();
-
-  charts.cleaners=new Chart(
-    document.getElementById('c-cleaners').getContext('2d'),
-    {
-      type:'bar',
-      data:{
-        labels:cleaners,
-        datasets:[{
-          label:'Bad Reviews',
-          data:counts,
-          backgroundColor:bc.map(c=>c+'bb'),
-          borderColor:bc,
-          borderWidth:1.5,
-          borderRadius:6
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{legend:{display:false}},
-        scales:{
-          y:{beginAtZero:true,ticks:{stepSize:1}},
-          x:{grid:{display:false}}
-        }
-      }
+  charts.cleaners=new Chart(document.getElementById('c-cleaners').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:cleaners,
+      datasets:[
+        {label:'Good',data:good,backgroundColor:'#2d6a1fbb',borderColor:'#2d6a1f',borderWidth:1.5,borderRadius:4},
+        {label:'Bad',data:bad,backgroundColor:'#c0392bbb',borderColor:'#c0392b',borderWidth:1.5,borderRadius:4}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:true,position:'bottom',labels:{boxWidth:12,font:{size:11}}}},
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{stepSize:1}}}
     }
-  );
+  });
+}
+
+function renderAvgChart(){
+  const stats=getCleanerStats();
+  const cleaners=Object.keys(stats);
+  if(!cleaners.length)return;
+  const avgs=cleaners.map(n=>+(stats[n].scoreSum/stats[n].reviewCount).toFixed(2));
+  const bc=cleaners.map((_,i)=>COLORS[i%COLORS.length]);
+  if(charts.avg) charts.avg.destroy();
+  charts.avg=new Chart(document.getElementById('c-avg').getContext('2d'),{
+    type:'bar',
+    data:{labels:cleaners,datasets:[{label:'Avg score /10',data:avgs,backgroundColor:bc.map(c=>c+'bb'),borderColor:bc,borderWidth:1.5,borderRadius:6}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>'Avg '+ctx.parsed.y+'/10'}}},
+      scales:{y:{min:0,max:10,ticks:{stepSize:2},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false}}}
+    }
+  });
 }
 
 function renderAccomChart(){
@@ -571,7 +574,7 @@ function renderAccomChart(){
   if(charts.accoms)charts.accoms.destroy();
   charts.accoms=new Chart(document.getElementById('c-accoms').getContext('2d'),{
     type:'bar',
-    data:{labels:accoms,datasets:[{data:counts,backgroundColor:'#d85a30bb',borderColor:'#d85a30',borderWidth:1.5,borderRadius:6}]},
+    data:{labels:accoms,datasets:[{label:'Reviews',data:counts,backgroundColor:'#3266adbb',borderColor:'#3266ad',borderWidth:1.5,borderRadius:6}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{font:{size:11}}}}}
   });
 }
@@ -615,10 +618,13 @@ function renderTrendChart(){
 function renderReviews(){
   const el=document.getElementById('reviews-list');
   const pf=document.getElementById('fp').value;
+  const rf=document.getElementById('fr').value;
   const cf=document.getElementById('fc').value;
   const af=document.getElementById('fa').value;
   let filtered=[...allReviews];
   if(pf!=='all')filtered=filtered.filter(r=>r.platform===pf);
+  if(rf==='good')filtered=filtered.filter(r=>!isBad(r));
+  if(rf==='bad')filtered=filtered.filter(r=>isBad(r));
   if(cf!=='all')filtered=filtered.filter(r=>r.cleaner1===cf||r.cleaner2===cf);
   if(af!=='all')filtered=filtered.filter(r=>r.accom===af);
   if(!filtered.length){el.innerHTML='<div class="loading">No reviews match this filter.</div>';return;}
@@ -626,6 +632,7 @@ function renderReviews(){
   el.innerHTML=filtered.map(r=>{
     const ci=cleaners.indexOf(r.cleaner1)%AV_BG.length;
     const n=norm(r.score,r.platform);
+    const bad=isBad(r);
     const displayName=r.cleaner2?r.cleaner1+' + '+r.cleaner2:r.cleaner1;
     const raw=r.platform==='airbnb'?r.score+'/5':r.score+'/10';
     const delBtn=isAdmin?`<button class="delbtn" onclick="deleteReview(${r.id})" title="Delete review">✕</button>`:'<span style="width:26px;"></span>';
@@ -637,6 +644,7 @@ function renderReviews(){
         ${r.comment?`<div class="rcomment">"${r.comment}"</div>`:''}
         <div class="radded">Added by ${r.added_by||'unknown'}</div>
       </div>
+      <span class="rtag ${bad?'rtag-bad':'rtag-good'}">${bad?'Bad':'Good'}</span>
       <span class="ppill ${r.platform==='airbnb'?'pill-a':'pill-b'}">${r.platform==='airbnb'?'Airbnb':'Book.'}</span>
       <span class="sbadge ${scoreClass(n)}">${raw} <span style="opacity:0.55;font-size:10px;">${n}/10</span></span>
       ${delBtn}
@@ -760,13 +768,14 @@ function exportToExcel(){
     'Platform': r.platform==='airbnb'?'Airbnb':'Booking.com',
     'Score (original)': r.score,
     'Score (normalized /10)': norm(r.score,r.platform),
+    'Result': isBad(r)?'Bad':'Good',
     'Comment': r.comment||'',
     'Added by': r.added_by||''
   }));
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,'Reviews',ws);
-  ws['!cols']=[{wch:12},{wch:16},{wch:16},{wch:18},{wch:14},{wch:16},{wch:20},{wch:40},{wch:25}];
+  ws['!cols']=[{wch:12},{wch:16},{wch:16},{wch:18},{wch:14},{wch:16},{wch:20},{wch:8},{wch:40},{wch:25}];
   const date=new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb,'cleaning-reviews-'+date+'.xlsx');
   toast('Exported successfully!');
