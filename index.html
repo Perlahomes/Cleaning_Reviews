@@ -237,6 +237,9 @@
           <div class="field"><label>Cleaner 2 (optional)</label>
             <select id="f-cleaner2"><option value="">— none —</option></select>
           </div>
+          <div class="field"><label>Cleaner 3 (optional)</label>
+            <select id="f-cleaner3"><option value="">— none —</option></select>
+          </div>
           <div class="field"><label>Accommodation</label>
             <select id="f-accom"><option value="">Select accommodation...</option></select>
           </div>
@@ -361,7 +364,7 @@ function getCleanerStats(reviews){
   const stats = {};
   const share = SPLIT_SHARED_BLAME ? null : 1; // weight handled below
   reviews.forEach(r=>{
-    const cleaners=[r.cleaner1,r.cleaner2].filter(Boolean);
+    const cleaners=[r.cleaner1,r.cleaner2,r.cleaner3].filter(Boolean);
     const ns=norm(r.score,r.platform);
     const w = SPLIT_SHARED_BLAME ? 1/cleaners.length : 1;
     cleaners.forEach(name=>{
@@ -446,11 +449,15 @@ async function loadReviews(){
 function populateCleanerSelects(){
   const s1=document.getElementById('f-cleaner1');
   const s2=document.getElementById('f-cleaner2');
-  const v1=s1.value,v2=s2.value;
-  s1.innerHTML='<option value="">Select cleaner...</option>'+cleanersList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
-  s2.innerHTML='<option value="">— none —</option>'+cleanersList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  const s3=document.getElementById('f-cleaner3');
+  const v1=s1.value,v2=s2.value,v3=s3.value;
+  const opts=cleanersList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  s1.innerHTML='<option value="">Select cleaner...</option>'+opts;
+  s2.innerHTML='<option value="">— none —</option>'+opts;
+  s3.innerHTML='<option value="">— none —</option>'+opts;
   if(v1)s1.value=v1;
   if(v2)s2.value=v2;
+  if(v3)s3.value=v3;
   const fc=document.getElementById('fc');
   const prev=fc.value;
   fc.innerHTML='<option value="all">All cleaners</option>'+cleanersList.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
@@ -501,18 +508,20 @@ function setBDot(v){
 async function addReview(){
   const c1=document.getElementById('f-cleaner1').value;
   const c2=document.getElementById('f-cleaner2').value;
+  const c3=document.getElementById('f-cleaner3').value;
   const ac=document.getElementById('f-accom').value;
   const dt=document.getElementById('f-date').value;
   const comment=document.getElementById('f-comment').value.trim();
   if(!c1||!ac||!dt||!selectedScore){toast('Please fill all required fields!');return;}
   const {error}=await db.from('reviews').insert({
-    cleaner1:c1,cleaner2:c2||null,accom:ac,date:dt,
+    cleaner1:c1,cleaner2:c2||null,cleaner3:c3||null,accom:ac,date:dt,
     score:selectedScore,platform,comment:comment||null,
     added_by:currentUser.email
   });
   if(error){toast('Error: '+error.message);return;}
   document.getElementById('f-cleaner1').value='';
   document.getElementById('f-cleaner2').value='';
+  document.getElementById('f-cleaner3').value='';
   document.getElementById('f-accom').value='';
   document.getElementById('f-comment').value='';
   selectedScore=0;renderScoreInput();
@@ -699,7 +708,7 @@ function renderTrendTabs(){
 
 function renderTrendChart(){
   if(!activeTrendCleaner)return;
-  const cr=scopedReviews().filter(r => r.cleaner1===activeTrendCleaner || r.cleaner2===activeTrendCleaner).sort((a,b)=>a.date.localeCompare(b.date));
+  const cr=scopedReviews().filter(r => r.cleaner1===activeTrendCleaner || r.cleaner2===activeTrendCleaner || r.cleaner3===activeTrendCleaner).sort((a,b)=>a.date.localeCompare(b.date));
   if(charts.trend)charts.trend.destroy();
   if(!cr.length)return;
   const cleaners=Object.keys(getCleanerStats());
@@ -727,7 +736,7 @@ function renderReviews(){
   if(pf!=='all')filtered=filtered.filter(r=>r.platform===pf);
   if(rf==='good')filtered=filtered.filter(r=>!isBad(r));
   if(rf==='bad')filtered=filtered.filter(r=>isBad(r));
-  if(cf!=='all')filtered=filtered.filter(r=>r.cleaner1===cf||r.cleaner2===cf);
+  if(cf!=='all')filtered=filtered.filter(r=>r.cleaner1===cf||r.cleaner2===cf||r.cleaner3===cf);
   if(af!=='all')filtered=filtered.filter(r=>r.accom===af);
   if(!filtered.length){el.innerHTML='<div class="loading">No reviews match this filter.</div>';return;}
   const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
@@ -735,7 +744,7 @@ function renderReviews(){
     const ci=cleaners.indexOf(r.cleaner1)%AV_BG.length;
     const n=norm(r.score,r.platform);
     const bad=isBad(r);
-    const displayName=r.cleaner2?r.cleaner1+' + '+r.cleaner2:r.cleaner1;
+    const displayName=[r.cleaner1,r.cleaner2,r.cleaner3].filter(Boolean).join(' + ');
     const raw=r.platform==='airbnb'?r.score+'/5':r.score+'/10';
     const delBtn=isAdmin?`<button class="delbtn" onclick="deleteReview(${r.id})" title="Delete review">✕</button>`:'<span style="width:26px;"></span>';
     return `<div class="review-item">
@@ -866,6 +875,7 @@ function exportToExcel(){
     'Date': r.date,
     'Cleaner 1': r.cleaner1,
     'Cleaner 2': r.cleaner2||'',
+    'Cleaner 3': r.cleaner3||'',
     'Accommodation': r.accom,
     'Platform': r.platform==='airbnb'?'Airbnb':'Booking.com',
     'Score (original)': r.score,
@@ -877,7 +887,7 @@ function exportToExcel(){
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,'Reviews',ws);
-  ws['!cols']=[{wch:12},{wch:16},{wch:16},{wch:18},{wch:14},{wch:16},{wch:20},{wch:8},{wch:40},{wch:25}];
+  ws['!cols']=[{wch:12},{wch:16},{wch:16},{wch:16},{wch:18},{wch:14},{wch:16},{wch:20},{wch:8},{wch:40},{wch:25}];
   const date=new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb,'cleaning-reviews-'+date+'.xlsx');
   toast('Exported successfully!');
