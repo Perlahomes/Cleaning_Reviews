@@ -189,6 +189,7 @@
           <button class="ptab on" data-range="all" onclick="setRange('all')">All time</button>
         </div>
       </div>
+      <div class="card-title" style="margin-bottom:10px;">Cleaning reviews</div>
       <div class="metrics">
         <div class="metric"><div class="metric-label">Total reviews</div><div class="metric-val" id="m-total">—</div></div>
         <div class="metric"><div class="metric-label">Total good reviews</div><div class="metric-val" id="m-totalgood" style="color:var(--high);">—</div><div class="metric-sub">5★ / 10 only</div></div>
@@ -220,6 +221,18 @@
         <div class="tabs" id="trend-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"></div>
         <div class="chart-wrap"><canvas id="c-trend" role="img" aria-label="Line chart score trend over time"></canvas></div>
       </div>
+
+      <div class="card-title" style="margin:1.75rem 0 10px;border-top:1px solid var(--border);padding-top:1.5rem;">Staff reviews</div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">Total reviews</div><div class="metric-val" id="s-total">—</div></div>
+        <div class="metric"><div class="metric-label">Total good reviews</div><div class="metric-val" id="s-good" style="color:var(--high);">—</div><div class="metric-sub">5★ / 10 only</div></div>
+        <div class="metric"><div class="metric-label">Total bad reviews</div><div class="metric-val" id="s-bad" style="color:var(--low);">—</div><div class="metric-sub">anything lower</div></div>
+        <div class="metric"><div class="metric-label">Average score</div><div class="metric-val" id="s-avg">—</div><div class="metric-sub">out of 10</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Staff reviews per accommodation</div>
+        <div class="chart-wrap"><canvas id="c-staff-accoms" role="img" aria-label="Bar chart of staff reviews per accommodation"></canvas></div>
+      </div>
     </div>
 
     <!-- ADD REVIEW -->
@@ -227,17 +240,21 @@
       <div class="page-header"><div class="page-title">Add review</div></div>
       <div class="card">
         <div class="platform-toggle">
+          <button class="ptab on" id="btn-type-clean" onclick="setReviewType('cleaner')">🧹 Cleaning</button>
+          <button class="ptab" id="btn-type-staff" onclick="setReviewType('staff')">👤 Staff</button>
+        </div>
+        <div class="platform-toggle">
           <button class="ptab ab" id="btn-ab" onclick="setPlatform('airbnb')">✦ Airbnb (1–5)</button>
           <button class="ptab" id="btn-bk" onclick="setPlatform('booking')">⬛ Booking.com (1–10)</button>
         </div>
         <div class="form-row" style="margin-bottom:12px;">
-          <div class="field"><label>Cleaner 1</label>
+          <div class="field cleaner-only"><label>Cleaner 1</label>
             <select id="f-cleaner1"><option value="">Select cleaner...</option></select>
           </div>
-          <div class="field"><label>Cleaner 2 (optional)</label>
+          <div class="field cleaner-only"><label>Cleaner 2 (optional)</label>
             <select id="f-cleaner2"><option value="">— none —</option></select>
           </div>
-          <div class="field"><label>Cleaner 3 (optional)</label>
+          <div class="field cleaner-only"><label>Cleaner 3 (optional)</label>
             <select id="f-cleaner3"><option value="">— none —</option></select>
           </div>
           <div class="field"><label>Accommodation</label>
@@ -266,6 +283,7 @@
       <div class="card">
         <div class="filter-row">
           <select id="fp" onchange="renderReviews()"><option value="all">All platforms</option><option value="airbnb">Airbnb</option><option value="booking">Booking.com</option></select>
+          <select id="fcat" onchange="renderReviews()"><option value="all">Cleaning &amp; staff</option><option value="cleaner">Cleaning only</option><option value="staff">Staff only</option></select>
           <select id="fr" onchange="renderReviews()"><option value="all">Good &amp; bad</option><option value="good">Good only</option><option value="bad">Bad only</option></select>
           <select id="fc" onchange="renderReviews()"><option value="all">All cleaners</option></select>
           <select id="fa" onchange="renderReviews()"><option value="all">All accommodations</option></select>
@@ -337,7 +355,8 @@ let platform = 'airbnb';
 let selectedScore = 0;
 let activeTrendCleaner = null;
 let charts = {};
-let dateRange = 'all'; // 'all' | '30' | '90'
+let dateRange = 'all'; // 'all' | '30' | '60'
+let reviewType = 'cleaner'; // 'cleaner' | 'staff' — used by the Add review form
 
 // If a review names two cleaners, each is held fully accountable by default.
 // Set this to true to split the blame 0.5 each instead.
@@ -348,8 +367,10 @@ function norm(s,p){return p==='airbnb'?s*2:s;}
 // Everything else counts as bad.
 function isGood(r){return norm(r.score,r.platform)>=10;}
 function isBad(r){return !isGood(r);}
+function isStaff(r){return r.category==='staff';}        // staff review
+function isCleaning(r){return r.category!=='staff';}      // anything else = cleaning
 
-// Reviews scoped to the dashboard's selected date range.
+// Reviews scoped to the dashboard's selected date range (all categories).
 function scopedReviews(){
   if(dateRange==='all') return allReviews;
   const days = parseInt(dateRange,10);
@@ -358,9 +379,11 @@ function scopedReviews(){
   const c = cutoff.toISOString().slice(0,10);
   return allReviews.filter(r=>r.date>=c);
 }
+// Cleaning reviews only, within the selected range.
+function scopedCleaning(){ return scopedReviews().filter(isCleaning); }
 
 function getCleanerStats(reviews){
-  reviews = reviews || scopedReviews();
+  reviews = reviews || scopedCleaning();
   const stats = {};
   const share = SPLIT_SHARED_BLAME ? null : 1; // weight handled below
   reviews.forEach(r=>{
@@ -512,10 +535,16 @@ async function addReview(){
   const ac=document.getElementById('f-accom').value;
   const dt=document.getElementById('f-date').value;
   const comment=document.getElementById('f-comment').value.trim();
-  if(!c1||!ac||!dt||!selectedScore){toast('Please fill all required fields!');return;}
+  // staff reviews don't need a cleaner; cleaning reviews need at least Cleaner 1
+  if(!ac||!dt||!selectedScore||(reviewType==='cleaner'&&!c1)){toast('Please fill all required fields!');return;}
+  const isStaffReview = reviewType==='staff';
   const {error}=await db.from('reviews').insert({
-    cleaner1:c1,cleaner2:c2||null,cleaner3:c3||null,accom:ac,date:dt,
+    cleaner1:isStaffReview?null:c1,
+    cleaner2:isStaffReview?null:(c2||null),
+    cleaner3:isStaffReview?null:(c3||null),
+    accom:ac,date:dt,
     score:selectedScore,platform,comment:comment||null,
+    category:reviewType,
     added_by:currentUser.email
   });
   if(error){toast('Error: '+error.message);return;}
@@ -546,13 +575,26 @@ function setRange(r){
   renderDashboard();
 }
 
+function setReviewType(t){
+  reviewType=t;
+  document.getElementById('btn-type-clean').classList.toggle('on',t==='cleaner');
+  document.getElementById('btn-type-staff').classList.toggle('on',t==='staff');
+  // hide the cleaner pickers for staff reviews
+  document.querySelectorAll('.cleaner-only').forEach(el=>el.style.display = t==='staff' ? 'none' : '');
+  if(t==='staff'){
+    document.getElementById('f-cleaner1').value='';
+    document.getElementById('f-cleaner2').value='';
+    document.getElementById('f-cleaner3').value='';
+  }
+}
+
 // counts may be fractional when blame is split; show them cleanly
 function fmtCount(n){return Number.isInteger(n)?n:(+n.toFixed(1));}
 
 function renderDashboard(){
 
-  const rev=scopedReviews();
-  const total=rev.length;
+  const cleaning=scopedCleaning();
+  const total=cleaning.length;
   document.getElementById('m-total').textContent=total;
 
   const goodSub=document.getElementById('m-mostgood-sub');
@@ -567,18 +609,19 @@ function renderDashboard(){
     goodSub.textContent='5★ / 10 only';
     badSub.textContent='anything lower';
     renderCleanerChart();renderRateChart();renderAvgChart();renderAccomChart();renderTrendTabs();
+    renderStaff();
     return;
   }
 
-  const normScores=rev.map(r=>norm(r.score,r.platform));
+  const normScores=cleaning.map(r=>norm(r.score,r.platform));
   const avg=normScores.reduce((a,b)=>a+b,0)/total;
   document.getElementById('m-avg').textContent=avg.toFixed(1);
 
-  const totalGood=rev.filter(isGood).length;
+  const totalGood=cleaning.filter(isGood).length;
   document.getElementById('m-totalgood').textContent=totalGood;
   document.getElementById('m-totalbad').textContent=total-totalGood;
 
-  const stats=getCleanerStats(rev);
+  const stats=getCleanerStats(cleaning);
 
   let bestGood=null,maxGood=0;
   let worstBad=null,maxBad=0;
@@ -607,6 +650,35 @@ function renderDashboard(){
   renderAvgChart();
   renderAccomChart();
   renderTrendTabs();
+  renderStaff();
+}
+
+function renderStaff(){
+  const staff=scopedReviews().filter(isStaff);
+  const total=staff.length;
+  document.getElementById('s-total').textContent=total;
+  if(!total){
+    document.getElementById('s-good').textContent='0';
+    document.getElementById('s-bad').textContent='0';
+    document.getElementById('s-avg').textContent='—';
+    if(charts.staffAccoms){charts.staffAccoms.destroy();charts.staffAccoms=null;}
+    return;
+  }
+  const good=staff.filter(isGood).length;
+  document.getElementById('s-good').textContent=good;
+  document.getElementById('s-bad').textContent=total-good;
+  const avg=staff.reduce((a,r)=>a+norm(r.score,r.platform),0)/total;
+  document.getElementById('s-avg').textContent=avg.toFixed(1);
+
+  const pairs=[...new Set(staff.map(r=>r.accom))]
+    .map(a=>[a, staff.filter(r=>r.accom===a).length])
+    .sort((x,y)=>y[1]-x[1]);
+  if(charts.staffAccoms)charts.staffAccoms.destroy();
+  charts.staffAccoms=new Chart(document.getElementById('c-staff-accoms').getContext('2d'),{
+    type:'bar',
+    data:{labels:pairs.map(p=>p[0]),datasets:[{label:'Reviews',data:pairs.map(p=>p[1]),backgroundColor:'#7f77ddbb',borderColor:'#7f77dd',borderWidth:1.5,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,ticks:{stepSize:1},grid:{color:'rgba(0,0,0,0.05)'}},x:{grid:{display:false},ticks:{font:{size:11}}}}}
+  });
 }
 
 function renderCleanerChart(){
@@ -674,7 +746,7 @@ function renderAvgChart(){
 }
 
 function renderAccomChart(){
-  const rev=scopedReviews();
+  const rev=scopedCleaning();
   const pairs=[...new Set(rev.map(r=>r.accom))]
     .map(a=>[a, rev.filter(r=>r.accom===a).length])
     .sort((x,y)=>y[1]-x[1]);
@@ -730,27 +802,32 @@ function renderReviews(){
   const el=document.getElementById('reviews-list');
   const pf=document.getElementById('fp').value;
   const rf=document.getElementById('fr').value;
+  const cat=document.getElementById('fcat').value;
   const cf=document.getElementById('fc').value;
   const af=document.getElementById('fa').value;
   let filtered=[...allReviews];
   if(pf!=='all')filtered=filtered.filter(r=>r.platform===pf);
+  if(cat==='cleaner')filtered=filtered.filter(isCleaning);
+  if(cat==='staff')filtered=filtered.filter(isStaff);
   if(rf==='good')filtered=filtered.filter(r=>!isBad(r));
   if(rf==='bad')filtered=filtered.filter(r=>isBad(r));
   if(cf!=='all')filtered=filtered.filter(r=>r.cleaner1===cf||r.cleaner2===cf||r.cleaner3===cf);
   if(af!=='all')filtered=filtered.filter(r=>r.accom===af);
   if(!filtered.length){el.innerHTML='<div class="loading">No reviews match this filter.</div>';return;}
-  const cleaners=[...new Set(allReviews.map(r=>r.cleaner1))];
+  const cleaners=[...new Set(allReviews.filter(isCleaning).map(r=>r.cleaner1))];
   el.innerHTML=filtered.map(r=>{
-    const ci=cleaners.indexOf(r.cleaner1)%AV_BG.length;
+    const staff=isStaff(r);
+    const ci=staff?3:(cleaners.indexOf(r.cleaner1)%AV_BG.length);
     const n=norm(r.score,r.platform);
     const bad=isBad(r);
-    const displayName=[r.cleaner1,r.cleaner2,r.cleaner3].filter(Boolean).join(' + ');
+    const displayName=staff?'Staff':[r.cleaner1,r.cleaner2,r.cleaner3].filter(Boolean).join(' + ');
+    const avText=staff?'👤':initials(r.cleaner1);
     const raw=r.platform==='airbnb'?r.score+'/5':r.score+'/10';
     const delBtn=isAdmin?`<button class="delbtn" onclick="deleteReview(${r.id})" title="Delete review">✕</button>`:'<span style="width:26px;"></span>';
     return `<div class="review-item">
-      <div class="av" style="background:${AV_BG[ci]};color:${AV_TX[ci]}">${initials(r.cleaner1)}</div>
+      <div class="av" style="background:${AV_BG[ci]};color:${AV_TX[ci]}">${avText}</div>
       <div class="rinfo">
-        <div class="rname">${displayName}</div>
+        <div class="rname">${displayName}${staff?' <span class="ppill" style="background:#7f77dd18;color:#5b53c0;">Staff</span>':''}</div>
         <div class="rsub">${r.accom} · ${r.date}</div>
         ${r.comment?`<div class="rcomment">"${r.comment}"</div>`:''}
         <div class="radded">Added by ${r.added_by||'unknown'}</div>
@@ -873,7 +950,8 @@ function exportToExcel(){
   if(!allReviews.length){toast('No reviews to export!');return;}
   const rows=allReviews.map(r=>({
     'Date': r.date,
-    'Cleaner 1': r.cleaner1,
+    'Category': isStaff(r)?'Staff':'Cleaning',
+    'Cleaner 1': r.cleaner1||'',
     'Cleaner 2': r.cleaner2||'',
     'Cleaner 3': r.cleaner3||'',
     'Accommodation': r.accom,
@@ -887,7 +965,7 @@ function exportToExcel(){
   const ws=XLSX.utils.json_to_sheet(rows);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,'Reviews',ws);
-  ws['!cols']=[{wch:12},{wch:16},{wch:16},{wch:16},{wch:18},{wch:14},{wch:16},{wch:20},{wch:8},{wch:40},{wch:25}];
+  ws['!cols']=[{wch:12},{wch:10},{wch:16},{wch:16},{wch:16},{wch:18},{wch:14},{wch:16},{wch:20},{wch:8},{wch:40},{wch:25}];
   const date=new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb,'cleaning-reviews-'+date+'.xlsx');
   toast('Exported successfully!');
